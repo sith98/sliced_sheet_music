@@ -1,5 +1,6 @@
-#config span {
-    padding-right: 2rem;
+#config span,
+#footer span {
+    padding-right: 1rem;
 }
 
 #images {

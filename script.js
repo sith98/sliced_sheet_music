@@ -10,10 +10,11 @@ let impliedState = {
 
 const getConfig = () => {
     const title = document.querySelector("#title").value;
-    const margin = parseInt(document.querySelector("#margin").value) || 10;
-    const maxScaling = parseFloat(document.querySelector("#max-scaling").value) || 0;
-    const pageLimit = parseInt(document.querySelector("#page-limit").value) || 0;
-    return { title, margin, maxScaling, pageLimit };
+    const margin = Math.max(0, parseInt(document.querySelector("#margin").value) || 10);
+    const maxScaling = Math.max(0, parseFloat(document.querySelector("#max-scaling").value) || 0);
+    const pageLimit = Math.max(0, parseInt(document.querySelector("#page-limit").value) || 0);
+    const optimizeWorstPage = document.querySelector("#optimize-worst").checked;
+    return { title, margin, maxScaling, pageLimit, optimizeWorstPage };
 }
 
 const updateState = action => {
@@ -36,7 +37,11 @@ const updateState = action => {
 const stateToImpliedState = state => {
     const config = getConfig();
     return {
-        layout: layoutImagesWithPageLimit(imagesToDpImages(state.images), getRelativePageHeight(config.margin), config.maxScaling, config.pageLimit),
+        layout: layoutImagesWithPageLimit(
+            imagesToDpImages(state.images),
+            getRelativePageHeight(config.margin),
+            config.maxScaling, config.pageLimit, config.optimizeWorstPage,
+        ),
     }
 }
 
@@ -176,7 +181,7 @@ const imagesToDpImages = images => {
     return dpImages;
 }
 
-const layoutImages = (dpImages, pageHeight, maxScaling = 0) => {
+const layoutImages = (dpImages, pageHeight, maxScaling = 0, optimizeWorstPage = false) => {
     if (dpImages.length === 0) return [];
     const dp = [];
     for (let i = 0; i < dpImages.length; i++) {
@@ -192,7 +197,7 @@ const layoutImages = (dpImages, pageHeight, maxScaling = 0) => {
             currentN += 1;
             const currentCost = computePageCost(currentHeight, pageHeight, maxScaling);
             const previousCost = j === 0 ? 0 : dp[j - 1].cost;
-            const cost = currentCost + previousCost;
+            const cost = optimizeWorstPage ? Math.max(currentCost, previousCost) : previousCost + currentCost;
             if (cost < dp[i].cost) {
                 dp[i].cost = cost;
                 dp[i].pageN = currentN;
@@ -214,7 +219,7 @@ const layoutImages = (dpImages, pageHeight, maxScaling = 0) => {
     return pages;
 };
 
-const layoutImagesWithPageLimit = (dpImages, pageHeight, maxScaling = 0, pageLimit = 0) => {
+const layoutImagesWithPageLimit = (dpImages, pageHeight, maxScaling = 0, pageLimit = 0, optimizeWorstPage = false) => {
     const defaultLayout = layoutImages(dpImages, pageHeight, maxScaling);
     if (pageLimit === 0 || defaultLayout.length <= pageLimit) {
         return defaultLayout;
@@ -243,10 +248,10 @@ const layoutImagesWithPageLimit = (dpImages, pageHeight, maxScaling = 0, pageLim
         for (let j = i; j >= 1; j--) {
             currentHeight += dpImages[j].height;
             currentN += 1;
-            const currentCost = computePageCost(currentHeight, pageHeight, maxScaling);
+            const currentCost = computePageCost(currentHeight, pageHeight, 0);
             for (let k = 2; k <= Math.min(pageLimit, i + 1); k++) {
                 const previousCost = dp[j - 1][k - 1 - 1].cost;
-                const cost = currentCost + previousCost;
+                const cost = optimizeWorstPage ? Math.max(currentCost, previousCost) : previousCost + currentCost;
                 if (cost < dp[i][k - 1].cost) {
                     dp[i][k - 1].cost = cost;
                     dp[i][k - 1].pageN = currentN;
@@ -254,6 +259,8 @@ const layoutImagesWithPageLimit = (dpImages, pageHeight, maxScaling = 0, pageLim
             }
         }
     }
+
+    console.log(dp);
 
     const pages = []
     let index = dp.length - 1;
@@ -294,8 +301,12 @@ const groupByPage = (images, layout) => {
 }
 
 // PDF
-const renderPdf = (images, { title, margin = 20, maxScaling = 1.5, pageLimit = 0 }) => {
-    const layout = layoutImagesWithPageLimit(imagesToDpImages(images), getRelativePageHeight(margin), maxScaling, pageLimit);
+const renderPdf = (images, { title, margin = 20, maxScaling = 1.5, pageLimit = 0, optimizeWorstPage = false }) => {
+    const layout = layoutImagesWithPageLimit(
+        imagesToDpImages(images),
+        getRelativePageHeight(margin),
+        maxScaling, pageLimit, optimizeWorstPage
+    );
     const pages = groupByPage(images, layout);
 
     const doc = jspdf.jsPDF();
@@ -343,7 +354,9 @@ const main = () => {
         const config = getConfig();
         renderPdf(state.images, config);
     });
-    ["#title", "#margin", "#max-scaling", "#page-limit"].forEach(id => document.querySelector(id).addEventListener("change", () => updateState(doNothing())));
+    ["#title", "#margin", "#max-scaling", "#page-limit", "#optimize-worst"].forEach(
+        id => document.querySelector(id).addEventListener("change", () => updateState(doNothing()))
+    );
     updateState(doNothing());
 };
 
