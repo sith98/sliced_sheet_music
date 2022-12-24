@@ -34,13 +34,26 @@
     </div>
     <div id="images">
     </div>
-    <div id="footer">
+    <div>
         <span>
             <button id="render">Render</button>
         </span>
+    </div>
+    <br>
+    <div>
+        <strong>Advanced Options:</strong>
+        <br>
         <span>
             <input type="checkbox" name="optimize-worst" checked id="optimize-worst">
-            <label for="optimize-worst">Minimize blank space of least full page only (leads to a more balanced layout)
+            <label for="optimize-worst">
+                Optimize worst page instead of all pages (leads to a more balanced layout, default: on)
+            </label>
+        </span>
+        <br>
+        <span>
+            <input type="checkbox" name="height-diff" id="height-diff">
+            <label for="height-diff">
+                Minimize images/page height difference instead of blank space (leads to less downscaling, default: off)
             </label>
         </span>
     </div>
