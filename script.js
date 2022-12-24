@@ -10,11 +10,19 @@ let impliedState = {
 
 const getConfig = () => {
     const title = document.querySelector("#title").value;
-    const margin = Math.max(0, parseInt(document.querySelector("#margin").value) || 10);
-    const maxScaling = Math.max(0, parseFloat(document.querySelector("#max-scaling").value) || 0);
-    const pageLimit = Math.max(0, parseInt(document.querySelector("#page-limit").value) || 0);
+    const margin = Math.max(0, parseIntDefault(document.querySelector("#margin").value));
+    const maxScaling = Math.max(0, parseFloatDefault(document.querySelector("#max-scaling").value));
+    const pageLimit = Math.max(0, parseIntDefault(document.querySelector("#page-limit").value));
     const optimizeWorstPage = document.querySelector("#optimize-worst").checked;
     return { title, margin, maxScaling, pageLimit, optimizeWorstPage };
+}
+const parseIntDefault = (input, defaultValue = 0) => {
+    const result = parseInt(input);
+    return Number.isNaN(result) ? defaultValue : result;
+}
+const parseFloatDefault = (input, defaultValue = 0) => {
+    const result = parseFloat(input);
+    return Number.isNaN(result) ? defaultValue : result;
 }
 
 const updateState = action => {
@@ -260,8 +268,6 @@ const layoutImagesWithPageLimit = (dpImages, pageHeight, maxScaling = 0, pageLim
         }
     }
 
-    console.log(dp);
-
     const pages = []
     let index = dp.length - 1;
     let k = pageLimit;
@@ -302,6 +308,7 @@ const groupByPage = (images, layout) => {
 
 // PDF
 const renderPdf = (images, { title, margin = 20, maxScaling = 1.5, pageLimit = 0, optimizeWorstPage = false }) => {
+    console.log(margin);
     const layout = layoutImagesWithPageLimit(
         imagesToDpImages(images),
         getRelativePageHeight(margin),
