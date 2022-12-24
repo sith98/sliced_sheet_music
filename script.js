@@ -49,7 +49,7 @@ const stateToImpliedState = state => {
         layout: layoutImagesWithPageLimit(
             imagesToDpImages(state.images),
             getRelativePageHeight(config.margin),
-            config.maxScaling, config.pageLimit, config.optimizeWorstPage, config.minimizeHeightDifference
+            config
         ),
     }
 }
@@ -156,13 +156,19 @@ const updateHtml = (prev, state, prevImplied, impliedState) => {
 const loadImg = (item) => new Promise((resolve, reject) => {
     var blob = item.getAsFile();
     var reader = new FileReader();
-    reader.onload = function (event) {
+    reader.onload = (event) => {
         const img = document.createElement("img");
         img.onload = () => {
             resolve(img);
         }
+        img.onerror = err => {
+            reject(err);
+        }
         img.src = event.target.result;
     };
+    reader.onerror = err => {
+        reject(err);
+    }
     reader.readAsDataURL(blob);
 });
 
@@ -190,7 +196,7 @@ const imagesToDpImages = images => {
     return dpImages;
 }
 
-const layoutImages = (dpImages, pageHeight, maxScaling = 0, optimizeWorstPage = false, minimizeHeightDifference = false) => {
+const layoutImages = (dpImages, pageHeight, { maxScaling = 0, optimizeWorstPage = false, minimizeHeightDifference = false }) => {
     if (dpImages.length === 0) return [];
     const dp = [];
     for (let i = 0; i < dpImages.length; i++) {
@@ -228,8 +234,9 @@ const layoutImages = (dpImages, pageHeight, maxScaling = 0, optimizeWorstPage = 
     return pages;
 };
 
-const layoutImagesWithPageLimit = (dpImages, pageHeight, maxScaling = 0, pageLimit = 0, optimizeWorstPage = false, minimizeHeightDifference = false) => {
-    const defaultLayout = layoutImages(dpImages, pageHeight, maxScaling, optimizeWorstPage, minimizeHeightDifference);
+const layoutImagesWithPageLimit = (dpImages, pageHeight, config = {}) => {
+    const { pageLimit = 0, optimizeWorstPage = false, minimizeHeightDifference = false } = config;
+    const defaultLayout = layoutImages(dpImages, pageHeight, config);
     if (pageLimit === 0 || defaultLayout.length <= pageLimit) {
         return defaultLayout;
     }
@@ -315,12 +322,13 @@ const groupByPage = (images, layout) => {
 }
 
 // PDF
-const renderPdf = (images, { title, margin = 20, maxScaling = 1.5, pageLimit = 0, optimizeWorstPage = false, minimizeHeightDifference = false }) => {
+const renderPdf = (images, config = {}) => {
+    const { title, margin = 20 } = config;
     console.log(margin);
     const layout = layoutImagesWithPageLimit(
         imagesToDpImages(images),
         getRelativePageHeight(margin),
-        maxScaling, pageLimit, optimizeWorstPage, minimizeHeightDifference
+        config
     );
     const pages = groupByPage(images, layout);
 
@@ -375,24 +383,5 @@ const main = () => {
     updateState(doNothing());
     // experiment();
 };
-
-const experiment = () => {
-    const dpImages = [];
-    for (let i = 0; i < 100; i++) {
-        const image = { height: 1, n: 1 };
-        dpImages.push(image);
-    }
-
-    for (let pageHeight = 1; pageHeight <= 100; pageHeight++) {
-        if (pageHeight === 41) {
-            console.log(41);
-        }
-        const spaceLayout = layoutImages(dpImages, pageHeight, 0, false, false);
-        const heightLayout = layoutImages(dpImages, pageHeight, 0, true, false);
-        if (heightLayout.length !== spaceLayout.length) {
-            console.log(pageHeight, spaceLayout, heightLayout);
-        }
-    }
-}
 
 window.addEventListener("load", main);
