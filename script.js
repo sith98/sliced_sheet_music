@@ -40,6 +40,7 @@ const updateState = action => {
         impliedState = stateToImpliedState(state);
         updateHtml(prev, state, prevImplied, impliedState);
     }
+    lsStore(state);
     console.log(state);
 };
 
@@ -116,6 +117,9 @@ const clearImages = () => state => {
         images: [],
     }
 };
+const loadFromLocalStore = lsState => state => {
+    return lsState;
+}
 const doNothing = () => state => state;
 
 
@@ -378,8 +382,49 @@ const renderPage = (doc, pageImages, width, height, margin, withPadding = false)
 }
 
 
+// local storage
+const lsKey = "sliced_sheet_music"
+const lsLoad = async () => {
+    const lsJson = localStorage.getItem(lsKey);
+    if (lsJson === null) {
+        return null;
+    }
+    const ls = JSON.parse(lsJson);
+
+    const images = await Promise.all(ls.images.map(image => new Promise((resolve) => {
+        const img = document.createElement("img");
+        img.onload = () => {
+            resolve({
+                img,
+                allowWrap: image.allowWrap,
+                id: image.id,
+            });
+        }
+        img.src = image.src;
+    })));
+    return {
+        counter: ls.counter,
+        images,
+    };
+}
+
+const lsStore = (state) => {
+    const imagesLs = state.images.map(image => {
+        return {
+            id: image.id,
+            allowWrap: image.allowWrap,
+            src: image.img.src,
+        };
+    })
+    localStorage.setItem(lsKey, JSON.stringify({
+        counter: state.counter,
+        images: imagesLs,
+    }));
+}
+
+
 // initialization
-const main = () => {
+const main = async () => {
     document.onpaste = async (event) => {
         const items = (event.clipboardData || event.originalEvent.clipboardData).items;
         for (const item of Object.values(items)) {
@@ -397,7 +442,12 @@ const main = () => {
     ["title", "margin", "max-scaling", "page-limit", "optimize-worst", "height-diff"].forEach(
         id => document.querySelector(`#${id}`).addEventListener("change", () => updateState(doNothing()))
     );
-    updateState(doNothing());
+    const lsState = await lsLoad();
+    if (lsState !== null) {
+        updateState(loadFromLocalStore(lsState));
+    } else {
+        updateState(doNothing());
+    }
     // experiment();
 };
 
