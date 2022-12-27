@@ -63,7 +63,7 @@ const addImage = img => state => {
     return [
         {
             ...state,
-            images: [...state.images, image],
+            images: resetWordWrapOfLastImage([...state.images, image]),
             counter: state.counter + 1,
         },
         () => {
@@ -75,7 +75,7 @@ const addImage = img => state => {
 const removeImage = id => state => {
     return {
         ...state,
-        images: state.images.filter(image => image.id !== id),
+        images: resetWordWrapOfLastImage(state.images.filter(image => image.id !== id)),
     }
 }
 const moveImage = (id, by) => state => {
@@ -85,18 +85,30 @@ const moveImage = (id, by) => state => {
     newImages.splice(index, 1);
     const newIndex = Math.max(Math.min(index + by, state.images.length - 1), 0);
     newImages.splice(newIndex, 0, image);
-    return { ...state, images: newImages };
+    return { ...state, images: resetWordWrapOfLastImage(newImages) };
 }
 const setAllowWrap = (id, allowWrap) => state => {
     return {
         ...state,
-        images: state.images.map(image => {
+        images: resetWordWrapOfLastImage(state.images.map(image => {
             if (image.id === id) {
                 return { ...image, allowWrap };
             }
             return image;
-        })
+        })),
     }
+}
+const resetWordWrapOfLastImage = images => {
+    if (images.length === 0) {
+        return images;
+    }
+    return [
+        ...images.slice(0, images.length - 1),
+        {
+            ...images[images.length - 1],
+            allowWrap: true,
+        }
+    ]
 }
 const clearImages = () => state => {
     return {
@@ -108,7 +120,7 @@ const doNothing = () => state => state;
 
 
 // render
-const mapImageToHtml = image => {
+const mapImageToHtml = (image, isLastImage = false) => {
     const div = document.createElement("div");
     div.classList.add("image-item")
     const removeButton = document.createElement("button");
@@ -118,6 +130,7 @@ const mapImageToHtml = image => {
     const allowWrapButton = document.createElement("button");
     allowWrapButton.innerText = image.allowWrap ? "Page Break" : "No Page Break";
     allowWrapButton.addEventListener("click", () => updateState(setAllowWrap(image.id, !image.allowWrap)))
+    allowWrapButton.disabled = isLastImage;
 
     const upButton = document.createElement("button");
     upButton.innerText = "Move Up";
@@ -144,7 +157,7 @@ const updateHtml = (prev, state, prevImplied, impliedState) => {
 
     if (prev.images !== state.images) {
         imageOutput.innerHTML = "";
-        const elements = state.images.map(mapImageToHtml);
+        const elements = state.images.map((image, index) => mapImageToHtml(image, index === state.images.length - 1));
         for (const el of elements) {
             imageOutput.appendChild(el);
         }
