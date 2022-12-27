@@ -349,14 +349,18 @@ const renderPage = (doc, pageImages, width, height, margin, withPadding = false)
     const imagesTotalHeight = pageImages.reduce((s, image) => s + image.img.height / image.img.width * width, 0);
     const scale = imagesTotalHeight < height ? 1 : height / imagesTotalHeight;
     const xOffset = 0.5 * (width - width * scale);
-    const padding = withPadding && imagesTotalHeight < height ? (height - imagesTotalHeight) / (pageImages.length - 1) : 0;
+    const nImages = pageImages.reduce((s, page) => s + (page.allowWrap ? 1 : 0), 0);
+    const padding = withPadding && imagesTotalHeight < height ? (height - imagesTotalHeight) / (nImages - 1) : 0;
     let y = 0;
     for (const image of pageImages) {
         const img = image.img;
         const aspectRatio = img.height / img.width;
         const scaledImageHeight = width * aspectRatio * scale;
         doc.addImage(img.src, "png", margin + xOffset, y + margin, width * scale, scaledImageHeight);
-        y += scaledImageHeight + padding;
+        y += scaledImageHeight;
+        if (image.allowWrap) {
+            y += padding;
+        }
     }
 }
 
