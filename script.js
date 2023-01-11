@@ -36,7 +36,7 @@ const actions = {
         return [
             {
                 ...state,
-                images: actions.resetWordWrapOfLastImage([...state.images, image]),
+                images: resetWordWrapOfLastImage([...state.images, image]),
                 counter: state.counter + 1,
             },
             () => {
@@ -48,7 +48,7 @@ const actions = {
     removeImage: id => state => {
         return {
             ...state,
-            images: actions.resetWordWrapOfLastImage(state.images.filter(image => image.id !== id)),
+            images: resetWordWrapOfLastImage(state.images.filter(image => image.id !== id)),
         }
     },
     moveImage: (id, by) => state => {
@@ -58,30 +58,18 @@ const actions = {
         newImages.splice(index, 1);
         const newIndex = Math.max(Math.min(index + by, state.images.length - 1), 0);
         newImages.splice(newIndex, 0, image);
-        return { ...state, images: actions.resetWordWrapOfLastImage(newImages) };
+        return { ...state, images: resetWordWrapOfLastImage(newImages) };
     },
     setAllowWrap: (id, allowWrap) => state => {
         return {
             ...state,
-            images: actions.resetWordWrapOfLastImage(state.images.map(image => {
+            images: resetWordWrapOfLastImage(state.images.map(image => {
                 if (image.id === id) {
                     return { ...image, allowWrap };
                 }
                 return image;
             })),
         }
-    },
-    resetWordWrapOfLastImage: images => {
-        if (images.length === 0) {
-            return images;
-        }
-        return [
-            ...images.slice(0, images.length - 1),
-            {
-                ...images[images.length - 1],
-                allowWrap: true,
-            }
-        ]
     },
     clearImages: () => state => {
         return {
@@ -93,6 +81,19 @@ const actions = {
         return lsState;
     },
     doNothing: () => state => state
+};
+
+const resetWordWrapOfLastImage = images => {
+    if (images.length === 0) {
+        return images;
+    }
+    return [
+        ...images.slice(0, images.length - 1),
+        {
+            ...images[images.length - 1],
+            allowWrap: true,
+        }
+    ]
 };
 
 
