@@ -245,6 +245,7 @@ const imagesToDpImages = images => {
 }
 
 // finds the optimal layout (for given config) ignoring page limit
+// running time: O(n^2) for n images
 const layoutImages = (dpImages, pageHeight, { maxScaling = 0, optimizeWorstPage = false, minimizeHeightDifference = false }) => {
     // special case no images
     if (dpImages.length === 0) return [];
@@ -288,6 +289,7 @@ const layoutImages = (dpImages, pageHeight, { maxScaling = 0, optimizeWorstPage 
 };
 
 // finds the optimal layout (for given config) including page limit
+// running time: O(n^2 * m) for n images and m pages
 const layoutImagesWithPageLimit = (dpImages, pageHeight, config = {}) => {
     const { pageLimit = 0, optimizeWorstPage = false, minimizeHeightDifference = false } = config;
     // find optimal layout without page limit
