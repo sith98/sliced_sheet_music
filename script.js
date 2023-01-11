@@ -2,12 +2,22 @@ let state = {
     images: [],
     counter: 0,
 };
+// is updated after each state change (based on state and form inputs)
 let impliedState = {
     layout: [],
 };
 
+//
 // update
+//
 
+// read and parse form input => render settings
+// title: default file name
+// margin: page margin (mm)
+// maxScaling: by how much are images allowed to be scaled down (0: no scaling limit)
+// pageLimit: maximum number of pages (0: no limit, >0: maxScaling is ignored)
+// optimizeWorstPage: false => minimize total layout "badness" (summed over all pages), true => minimize "badness" of worst page
+// minimizeHeightDifference: false => "badness" = unused space on page, true => "badness" = difference image height/page height (ignoring scaling)
 const getRenderConfig = () => {
     const title = document.querySelector("#title").value;
     const margin = Math.max(0, parseIntDefault(document.querySelector("#margin").value));
@@ -17,6 +27,8 @@ const getRenderConfig = () => {
     const minimizeHeightDifference = document.querySelector("#height-diff").checked;
     return { title, margin, maxScaling, pageLimit, optimizeWorstPage, minimizeHeightDifference };
 }
+
+// helper functions to handle invalid number inputs
 const parseIntDefault = (input, defaultValue = 0) => {
     const result = parseInt(input);
     return Number.isNaN(result) ? defaultValue : result;
@@ -26,6 +38,7 @@ const parseFloatDefault = (input, defaultValue = 0) => {
     return Number.isNaN(result) ? defaultValue : result;
 }
 
+// all possible state changes
 const actions = {
     addImage: img => state => {
         const image = {
@@ -83,6 +96,7 @@ const actions = {
     doNothing: () => state => state
 };
 
+// sets allowWrap property to true (necessary for render logic to work correctly)
 const resetWordWrapOfLastImage = images => {
     if (images.length === 0) {
         return images;
@@ -97,6 +111,7 @@ const resetWordWrapOfLastImage = images => {
 };
 
 
+// applies state change and performs HTML update
 const applyAction = action => {
     const prev = state;
     const prevImplied = impliedState;
@@ -126,7 +141,9 @@ const stateToImpliedState = state => {
     }
 }
 
+//
 // render
+//
 const mapImageToHtml = (image, isLastImage = false) => {
     const div = document.createElement("div");
     div.classList.add("image-item")
@@ -162,6 +179,7 @@ const mapImageToHtml = (image, isLastImage = false) => {
 const updateHtml = (prev, state, prevImplied, impliedState) => {
     const imageOutput = document.querySelector("#images");
 
+    // optimization: re-render image list only if images changed
     if (prev.images !== state.images) {
         imageOutput.innerHTML = "";
         const elements = state.images.map((image, index) => mapImageToHtml(image, index === state.images.length - 1));
@@ -172,12 +190,15 @@ const updateHtml = (prev, state, prevImplied, impliedState) => {
     document.querySelector("#render").innerText = `Print ${state.images.length} Images on ${impliedState.layout.length} Pages`;
 }
 
+//
 // I/O
+//
 const loadImg = (item) => new Promise((resolve, reject) => {
     var blob = item.getAsFile();
     var reader = new FileReader();
     reader.onload = (event) => {
         const img = document.createElement("img");
+        // img element must be loaded as image width/height is directly read from element for layouting
         img.onload = () => {
             resolve(img);
         }
@@ -192,7 +213,11 @@ const loadImg = (item) => new Promise((resolve, reject) => {
     reader.readAsDataURL(blob);
 });
 
+//
 // Layout
+//
+
+// computes page aspect ratio for a given margin (mm)
 const getRelativePageHeight = margin => {
     const doc = new jspdf.jsPDF();
     const pageWidth = doc.getPageWidth() - 2 * margin;
@@ -200,6 +225,9 @@ const getRelativePageHeight = margin => {
     return pageHeight / pageWidth;
 };
 
+// for layouting, only the aspect ratio (relative height) of images is needed
+// consecutive images with word wrap disabled are handled as one combined image
+// therefore, property n (number of images in combined image) is necessary to reference the original images
 const imagesToDpImages = images => {
     const dpImages = [];
     let currentHeight = 0;
@@ -216,12 +244,16 @@ const imagesToDpImages = images => {
     return dpImages;
 }
 
+// finds the optimal layout (for given config) ignoring page limit
 const layoutImages = (dpImages, pageHeight, { maxScaling = 0, optimizeWorstPage = false, minimizeHeightDifference = false }) => {
+    // special case no images
     if (dpImages.length === 0) return [];
+    // dp[i - 1]: optimal layout for first i images (layout cost, number of images on last page)
     const dp = [];
     for (let i = 0; i < dpImages.length; i++) {
         dp.push({ cost: Infinity, pageN: 0 });
     }
+    // special case: 1 image
     dp[0].cost = computePageCost(dpImages[0].height, pageHeight, maxScaling, minimizeHeightDifference);
     dp[0].pageN = 1;
     for (let i = 1; i < dpImages.length; i++) {
@@ -239,6 +271,7 @@ const layoutImages = (dpImages, pageHeight, { maxScaling = 0, optimizeWorstPage 
             }
         }
     }
+    // create layout (number of images for each page), also considering combined images (image.n > 1)
     const pages = []
     let index = dp.length - 1;
     while (index >= 0) {
@@ -254,13 +287,17 @@ const layoutImages = (dpImages, pageHeight, { maxScaling = 0, optimizeWorstPage 
     return pages;
 };
 
+// finds the optimal layout (for given config) including page limit
 const layoutImagesWithPageLimit = (dpImages, pageHeight, config = {}) => {
     const { pageLimit = 0, optimizeWorstPage = false, minimizeHeightDifference = false } = config;
+    // find optimal layout without page limit
     const defaultLayout = layoutImages(dpImages, pageHeight, config);
+    // if no page limit specified or optimal layout already satisfies page limit
     if (pageLimit === 0 || defaultLayout.length <= pageLimit) {
         return defaultLayout;
     }
     if (dpImages.length === 0) return [];
+    // dp[i - 1][j - 1]: optimal layout for first i images using exactly j pages (layout cost, number of images on last page)
     const dp = [];
     for (let i = 0; i < dpImages.length; i++) {
         const dpRow = [];
@@ -285,6 +322,7 @@ const layoutImagesWithPageLimit = (dpImages, pageHeight, config = {}) => {
             currentHeight += dpImages[j].height;
             currentN += 1;
             const currentCost = computePageCost(currentHeight, pageHeight, 0, minimizeHeightDifference);
+            // to compute optimal k-page layout, guess last page and use optimal (k - 1)-page layout for the remaining images
             for (let k = 2; k <= Math.min(pageLimit, i + 1); k++) {
                 const previousCost = dp[j - 1][k - 1 - 1].cost;
                 const cost = optimizeWorstPage ? Math.max(currentCost, previousCost) : previousCost + currentCost;
@@ -296,6 +334,7 @@ const layoutImagesWithPageLimit = (dpImages, pageHeight, config = {}) => {
         }
     }
 
+    // create layout (number of images for each page), also considering combined images (image.n > 1)
     const pages = []
     let index = dp.length - 1;
     let k = pageLimit;
@@ -313,6 +352,7 @@ const layoutImagesWithPageLimit = (dpImages, pageHeight, config = {}) => {
     return pages;
 }
 
+// compute layout cost (badness) for a single page
 const computePageCost = (imagesHeight, pageHeight, maxScaling = 0, minimizeHeightDifference = false) => {
     const tooLarge = imagesHeight > pageHeight;
     // ratio of blank space on the page
@@ -327,6 +367,8 @@ const computePageCost = (imagesHeight, pageHeight, maxScaling = 0, minimizeHeigh
     }
 }
 
+// takes array of images and array of "number images" per page as input
+// returns array where i-th element is array of all images in i-th page (in order)
 const groupByPage = (images, layout) => {
     const pages = [];
     let index = 0;
@@ -341,7 +383,7 @@ const groupByPage = (images, layout) => {
     return pages;
 }
 
-// PDF
+// Creates PDF and tries to save it using the browser's save dialog
 const renderPdf = (images, config = {}) => {
     const { title, margin = 20 } = config;
     console.log(margin);
@@ -365,6 +407,7 @@ const renderPdf = (images, config = {}) => {
     }
     doc.save(`${title}.pdf`);
 };
+// render single PDF page
 const renderPage = (doc, pageImages, width, height, margin, withPadding = false) => {
     const imagesTotalHeight = pageImages.reduce((s, image) => s + image.img.height / image.img.width * width, 0);
     const scale = imagesTotalHeight < height ? 1 : height / imagesTotalHeight;
@@ -428,6 +471,7 @@ const saveStateToLocalStorage = (state) => {
 
 // initialization
 const main = async () => {
+    // handle clipboard paste event
     document.onpaste = async (event) => {
         const items = (event.clipboardData || event.originalEvent.clipboardData).items;
         for (const item of Object.values(items)) {
@@ -442,6 +486,7 @@ const main = async () => {
         const config = getRenderConfig();
         renderPdf(state.images, config);
     });
+    // for all input changes, perform dummy action to update impliedState
     ["title", "margin", "max-scaling", "page-limit", "optimize-worst", "height-diff"].forEach(
         id => document.querySelector(`#${id}`).addEventListener("change", () => applyAction(doNothing()))
     );
@@ -449,6 +494,7 @@ const main = async () => {
     if (lsState !== null) {
         applyAction(loadFromLocalStore(lsState));
     } else {
+        // update impliedState
         applyAction(doNothing());
     }
     // experiment();
