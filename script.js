@@ -8,7 +8,7 @@ let impliedState = {
 
 // update
 
-const getConfig = () => {
+const getRenderConfig = () => {
     const title = document.querySelector("#title").value;
     const margin = Math.max(0, parseIntDefault(document.querySelector("#margin").value));
     const maxScaling = Math.max(0, parseFloatDefault(document.querySelector("#max-scaling").value));
@@ -26,7 +26,77 @@ const parseFloatDefault = (input, defaultValue = 0) => {
     return Number.isNaN(result) ? defaultValue : result;
 }
 
-const updateState = action => {
+const actions = {
+    addImage: img => state => {
+        const image = {
+            img,
+            allowWrap: true,
+            id: state.counter
+        }
+        return [
+            {
+                ...state,
+                images: actions.resetWordWrapOfLastImage([...state.images, image]),
+                counter: state.counter + 1,
+            },
+            () => {
+                const div = document.querySelector("#images")
+                div.scrollTop = div.scrollHeight;
+            }
+        ]
+    },
+    removeImage: id => state => {
+        return {
+            ...state,
+            images: actions.resetWordWrapOfLastImage(state.images.filter(image => image.id !== id)),
+        }
+    },
+    moveImage: (id, by) => state => {
+        const index = state.images.findIndex(image => image.id === id);
+        const image = state.images[index];
+        const newImages = state.images.slice();
+        newImages.splice(index, 1);
+        const newIndex = Math.max(Math.min(index + by, state.images.length - 1), 0);
+        newImages.splice(newIndex, 0, image);
+        return { ...state, images: actions.resetWordWrapOfLastImage(newImages) };
+    },
+    setAllowWrap: (id, allowWrap) => state => {
+        return {
+            ...state,
+            images: actions.resetWordWrapOfLastImage(state.images.map(image => {
+                if (image.id === id) {
+                    return { ...image, allowWrap };
+                }
+                return image;
+            })),
+        }
+    },
+    resetWordWrapOfLastImage: images => {
+        if (images.length === 0) {
+            return images;
+        }
+        return [
+            ...images.slice(0, images.length - 1),
+            {
+                ...images[images.length - 1],
+                allowWrap: true,
+            }
+        ]
+    },
+    clearImages: () => state => {
+        return {
+            ...state,
+            images: [],
+        }
+    },
+    loadFromLocalStore: lsState => state => {
+        return lsState;
+    },
+    doNothing: () => state => state
+};
+
+
+const applyAction = action => {
     const prev = state;
     const prevImplied = impliedState;
     const result = action(state);
@@ -40,12 +110,12 @@ const updateState = action => {
         impliedState = stateToImpliedState(state);
         updateHtml(prev, state, prevImplied, impliedState);
     }
-    lsStore(state);
+    saveStateToLocalStorage(state);
     console.log(state);
 };
 
 const stateToImpliedState = state => {
-    const config = getConfig();
+    const config = getRenderConfig();
     return {
         layout: layoutImagesWithPageLimit(
             imagesToDpImages(state.images),
@@ -55,94 +125,26 @@ const stateToImpliedState = state => {
     }
 }
 
-const addImage = img => state => {
-    const image = {
-        img,
-        allowWrap: true,
-        id: state.counter
-    }
-    return [
-        {
-            ...state,
-            images: resetWordWrapOfLastImage([...state.images, image]),
-            counter: state.counter + 1,
-        },
-        () => {
-            const div = document.querySelector("#images")
-            div.scrollTop = div.scrollHeight;
-        }
-    ]
-}
-const removeImage = id => state => {
-    return {
-        ...state,
-        images: resetWordWrapOfLastImage(state.images.filter(image => image.id !== id)),
-    }
-}
-const moveImage = (id, by) => state => {
-    const index = state.images.findIndex(image => image.id === id);
-    const image = state.images[index];
-    const newImages = state.images.slice();
-    newImages.splice(index, 1);
-    const newIndex = Math.max(Math.min(index + by, state.images.length - 1), 0);
-    newImages.splice(newIndex, 0, image);
-    return { ...state, images: resetWordWrapOfLastImage(newImages) };
-}
-const setAllowWrap = (id, allowWrap) => state => {
-    return {
-        ...state,
-        images: resetWordWrapOfLastImage(state.images.map(image => {
-            if (image.id === id) {
-                return { ...image, allowWrap };
-            }
-            return image;
-        })),
-    }
-}
-const resetWordWrapOfLastImage = images => {
-    if (images.length === 0) {
-        return images;
-    }
-    return [
-        ...images.slice(0, images.length - 1),
-        {
-            ...images[images.length - 1],
-            allowWrap: true,
-        }
-    ]
-}
-const clearImages = () => state => {
-    return {
-        ...state,
-        images: [],
-    }
-};
-const loadFromLocalStore = lsState => state => {
-    return lsState;
-}
-const doNothing = () => state => state;
-
-
 // render
 const mapImageToHtml = (image, isLastImage = false) => {
     const div = document.createElement("div");
     div.classList.add("image-item")
     const removeButton = document.createElement("button");
     removeButton.innerText = "Remove";
-    removeButton.addEventListener("click", () => updateState(removeImage(image.id)));
+    removeButton.addEventListener("click", () => applyAction(actions.removeImage(image.id)));
 
     const allowWrapButton = document.createElement("button");
     allowWrapButton.innerText = image.allowWrap ? "Page Break" : "No Page Break";
-    allowWrapButton.addEventListener("click", () => updateState(setAllowWrap(image.id, !image.allowWrap)))
+    allowWrapButton.addEventListener("click", () => applyAction(actions.setAllowWrap(image.id, !image.allowWrap)))
     allowWrapButton.disabled = isLastImage;
 
     const upButton = document.createElement("button");
     upButton.innerText = "Move Up";
-    upButton.addEventListener("click", () => updateState(moveImage(image.id, -1)));
+    upButton.addEventListener("click", () => applyAction(actions.moveImage(image.id, -1)));
 
     const downButton = document.createElement("button");
     downButton.innerText = "Move Down";
-    downButton.addEventListener("click", () => updateState(moveImage(image.id, +1)));
+    downButton.addEventListener("click", () => applyAction(actions.moveImage(image.id, +1)));
 
     const buttons = document.createElement("div");
     buttons.classList.add("buttons");
@@ -383,9 +385,9 @@ const renderPage = (doc, pageImages, width, height, margin, withPadding = false)
 
 
 // local storage
-const lsKey = "sliced_sheet_music"
-const lsLoad = async () => {
-    const lsJson = localStorage.getItem(lsKey);
+const localStorageKey = "sliced_sheet_music"
+const loadStateFromLocalStorage = async () => {
+    const lsJson = localStorage.getItem(localStorageKey);
     if (lsJson === null) {
         return null;
     }
@@ -408,7 +410,7 @@ const lsLoad = async () => {
     };
 }
 
-const lsStore = (state) => {
+const saveStateToLocalStorage = (state) => {
     const imagesLs = state.images.map(image => {
         return {
             id: image.id,
@@ -416,7 +418,7 @@ const lsStore = (state) => {
             src: image.img.src,
         };
     })
-    localStorage.setItem(lsKey, JSON.stringify({
+    localStorage.setItem(localStorageKey, JSON.stringify({
         counter: state.counter,
         images: imagesLs,
     }));
@@ -430,23 +432,23 @@ const main = async () => {
         for (const item of Object.values(items)) {
             if (item.kind === 'file') {
                 const img = await loadImg(item);
-                updateState(addImage(img));
+                applyAction(actions.addImage(img));
             }
         }
     };
-    document.querySelector("#clear").addEventListener("click", () => updateState(clearImages()));
+    document.querySelector("#clear").addEventListener("click", () => applyAction(clearImages()));
     document.querySelector("#render").addEventListener("click", () => {
-        const config = getConfig();
+        const config = getRenderConfig();
         renderPdf(state.images, config);
     });
     ["title", "margin", "max-scaling", "page-limit", "optimize-worst", "height-diff"].forEach(
-        id => document.querySelector(`#${id}`).addEventListener("change", () => updateState(doNothing()))
+        id => document.querySelector(`#${id}`).addEventListener("change", () => applyAction(doNothing()))
     );
-    const lsState = await lsLoad();
+    const lsState = await loadStateFromLocalStorage();
     if (lsState !== null) {
-        updateState(loadFromLocalStore(lsState));
+        applyAction(loadFromLocalStore(lsState));
     } else {
-        updateState(doNothing());
+        applyAction(doNothing());
     }
     // experiment();
 };
